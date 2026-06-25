@@ -139,6 +139,13 @@
 <div class="toast" id="toast"></div>
 
 <script>
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
 const STORAGE_KEY = 'boulevard_menu_v2';
 
 const DEFAULT_DATA = {
@@ -457,6 +464,31 @@ function persist() {
 function saveAll() {
   persist();
   downloadMenukaart();
+}
+
+
+function openNewCatModal() {
+  document.getElementById('nc-name').value = '';
+  document.getElementById('nc-section').value = '';
+  document.getElementById('newcat-modal').classList.add('open');
+}
+
+function closeNewCatModal() {
+  document.getElementById('newcat-modal').classList.remove('open');
+}
+
+function confirmNewCat() {
+  const name = document.getElementById('nc-name').value.trim();
+  const section = document.getElementById('nc-section').value.trim() || 'Algemeen';
+  if (!name) { alert('Vul een naam in'); return; }
+  if (data[name]) { alert('Deze categorie bestaat al'); return; }
+  data[name] = { subcats: [section], items: [] };
+  persist();
+  closeNewCatModal();
+  currentCat = name;
+  loadSidebar();
+  renderItems();
+  showToast('Categorie "' + name + '" aangemaakt!');
 }
 
 function downloadMenukaart() {
