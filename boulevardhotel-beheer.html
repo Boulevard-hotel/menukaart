@@ -233,18 +233,30 @@ async function saveToGitHub() {
     };
     if (sha) body.sha = sha;
 
-    const putResp = await fetch(
-      `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': 'token ' + token,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
+    // Try up to 3 times with fresh SHA on 409
+    let putResp, attempts = 0;
+    while (attempts < 3) {
+      attempts++;
+      if (attempts > 1) {
+        // Wait a bit and get fresh SHA
+        await new Promise(r => setTimeout(r, 1500));
+        body.sha = await getSHA();
+        setStatus('busy', `Opnieuw proberen (${attempts}/3)...`);
       }
-    );
+      putResp = await fetch(
+        `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': 'token ' + token,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        }
+      );
+      if (putResp.ok || putResp.status !== 409) break;
+    }
 
     if (putResp.ok) {
       persist();
@@ -253,10 +265,6 @@ async function saveToGitHub() {
       showToast('✅ Opgeslagen! Menukaart is over ~1 minuut live.');
     } else {
       const err = await putResp.json();
-      // If still 409, try once more with fresh SHA
-      if (putResp.status === 409) {
-        throw new Error('Conflict — probeer nogmaals op te slaan');
-      }
       throw new Error(err.message || 'GitHub fout ' + putResp.status);
     }
   } catch(e) {
