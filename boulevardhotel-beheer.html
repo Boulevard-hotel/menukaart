@@ -159,7 +159,7 @@
 
 <script>
 // GitHub config
-const GH_TOKEN = localStorage.getItem('gh_token') || '';
+let GH_TOKEN = localStorage.getItem('gh_token') || '';
 const GH_OWNER = 'Boulevard-hotel';
 const GH_REPO  = 'menukaart';
 const GH_FILE  = 'index.html';
@@ -193,31 +193,39 @@ function setStatus(state, text) {
   txt.textContent = text;
 }
 
+async function getSHA() {
+  const resp = await fetch(
+    `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}?ref=${GH_BRANCH}&t=${Date.now()}`,
+    { headers: { 'Authorization': 'token ' + GH_TOKEN, 'Accept': 'application/vnd.github.v3+json' } }
+  );
+  if (resp.ok) {
+    const d = await resp.json();
+    return d.sha;
+  }
+  return null;
+}
+
 async function saveToGitHub() {
   const btn = document.getElementById('save-btn');
   btn.disabled = true;
   setStatus('busy', 'Bezig met opslaan...');
 
   try {
-    // Build new index.html with current data embedded
+    const token = localStorage.getItem('gh_token') || '';
+    if (!token) {
+      document.getElementById('token-banner').style.display = 'flex';
+      throw new Error('Geen token ingevuld — vul je GitHub token in via het gele balkje');
+    }
+
+    // Build new index.html
     const template = decodeURIComponent(escape(atob(TEMPLATE_B64)));
     const dataScript = '<script id="inline-menu-data">\nlocalStorage.setItem(\'boulevard_menu_v2\', JSON.stringify(' + JSON.stringify(data) + '));\n<\/script>';
     const newContent = template.replace('</head>', dataScript + '\n</head>');
     const newContentB64 = btoa(unescape(encodeURIComponent(newContent)));
 
-    // Get current file SHA (needed to update)
-    const getResp = await fetch(
-      `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}?ref=${GH_BRANCH}`,
-      { headers: { 'Authorization': 'token ' + GH_TOKEN, 'Accept': 'application/vnd.github.v3+json' } }
-    );
+    // Always get fresh SHA to avoid 409 conflict
+    const sha = await getSHA();
 
-    let sha = null;
-    if (getResp.ok) {
-      const fileData = await getResp.json();
-      sha = fileData.sha;
-    }
-
-    // Push new content
     const body = {
       message: 'Menukaart update via beheerpagina',
       content: newContentB64,
@@ -230,7 +238,7 @@ async function saveToGitHub() {
       {
         method: 'PUT',
         headers: {
-          'Authorization': 'token ' + GH_TOKEN,
+          'Authorization': 'token ' + token,
           'Accept': 'application/vnd.github.v3+json',
           'Content-Type': 'application/json'
         },
@@ -245,11 +253,15 @@ async function saveToGitHub() {
       showToast('✅ Opgeslagen! Menukaart is over ~1 minuut live.');
     } else {
       const err = await putResp.json();
-      throw new Error(err.message || 'GitHub fout');
+      // If still 409, try once more with fresh SHA
+      if (putResp.status === 409) {
+        throw new Error('Conflict — probeer nogmaals op te slaan');
+      }
+      throw new Error(err.message || 'GitHub fout ' + putResp.status);
     }
   } catch(e) {
     setStatus('err', 'Fout bij opslaan');
-    showToast('❌ Fout: ' + e.message, true);
+    showToast('❌ ' + e.message, true);
   } finally {
     btn.disabled = false;
   }
