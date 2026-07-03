@@ -314,6 +314,7 @@ function renderItems() {
       </div>
       <div class="item-actions">
         <button class="photo-btn" onclick="triggerPhoto(${item.id})">📷 Foto</button>
+        ${item.photo ? `<button class="photo-btn" onclick="removePhoto(${item.id})" style="color:#c0392b;border-color:#e0c0c0;">✕ Foto</button>` : ''}
         <button class="del-btn" onclick="deleteItem(${item.id})">Verwijder</button>
       </div>
     </div>
@@ -415,6 +416,16 @@ function confirmNewCat() {
   loadSidebar();
   renderItems();
   showToast('Categorie "' + name + '" aangemaakt!');
+}
+
+function removePhoto(id) {
+  const item = data[currentCat].items.find(i => i.id === id);
+  if (item) {
+    item.photo = '';
+    markChanged();
+    renderItems();
+    showToast('Foto verwijderd');
+  }
 }
 
 function markChanged() {
