@@ -185,7 +185,13 @@ let data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || JSON.parse
 let currentCat = Object.keys(data)[0];
 let currentSubcat = null;
 let pendingPhotoId = null;
-let nextId = 2000;
+let nextId = (function() {
+  let max = 2000;
+  Object.values(data).forEach(cat => {
+    cat.items.forEach(item => { if (item.id >= max) max = item.id + 1; });
+  });
+  return max;
+})();
 let hasUnsavedChanges = false;
 
 function showToast(msg, isError) {
